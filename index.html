@@ -2,219 +2,270 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Meteor Impact</title>
+<title>Meteor Impact Simulation</title>
 <style>
   body { margin: 0; overflow: hidden; background: black; }
   canvas { display: block; }
   #restartBtn {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 40px;
-    height: 40px;
-    background: #fff;
-    border-radius: 50%;
-    text-align: center;
-    line-height: 40px;
-    font-weight: bold;
-    cursor: pointer;
-    user-select: none;
-    box-shadow: 0 0 10px #fff;
-    z-index: 10;
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
+  background: rgba(255, 85, 0, 0.8);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: transform 0.2s;
+}
+#restartBtn:hover {
+  transform: rotate(20deg);
+
   }
-  #restartBtn:hover { background: #ff6600; color: #fff; }
 </style>
 </head>
 <body>
-<div id="restartBtn">&#10227;</div>
+<!-- Replace button with a small icon -->
+<button id="restartBtn" title="Restart Simulation">&#x21bb;</button>
+
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
 
 <script>
-let scene, camera, renderer, world;
-let planetMesh, planetBody;
-let meteorMesh, meteorBody;
-let chunks = [];
-let impactHappened = false;
-const planetRadius = 3;
-let stars;
+// --- Scene & Camera ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+camera.position.z = 50;
 
-initScene();
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-function initScene() {
-    scene = new THREE.Scene();
+// --- Lights ---
+scene.add(new THREE.AmbientLight(0x404040));
+const dirLight = new THREE.DirectionalLight(0xffffff,1.2);
+dirLight.position.set(50,50,50);
+scene.add(dirLight);
 
-    // Camera & Renderer
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    camera.position.z = 12;
+// --- Starfield ---
+const starCount = 2000;
+const positions = [];
+for(let i=0;i<starCount;i++){
+    positions.push((Math.random()-0.5)*2000);
+    positions.push((Math.random()-0.5)*2000);
+    positions.push((Math.random()-0.5)*2000);
+}
+const starGeometry = new THREE.BufferGeometry();
+starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+const starMaterial = new THREE.PointsMaterial({color:0xffffff,size:1});
+scene.add(new THREE.Points(starGeometry,starMaterial));
 
-    if(!renderer) {
-        renderer = new THREE.WebGLRenderer({antialias: true});
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-    }
+// --- Planet ---
+const planetRadius = 15;
+const planetGeometry = new THREE.SphereGeometry(planetRadius,256,256);
 
-    // Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const light1 = new THREE.DirectionalLight(0xffffff, 1);
-    light1.position.set(10, 10, 10);
-    scene.add(light1);
-    const light2 = new THREE.DirectionalLight(0xffffff, 0.5);
-    light2.position.set(-10, 5, -5);
-    scene.add(light2);
+// Procedural texture for stripes & patches
+const size = 1024;
+const canvas = document.createElement('canvas');
+canvas.width = canvas.height = size;
+const ctx = canvas.getContext('2d');
+ctx.fillStyle = '#8B4513';
+ctx.fillRect(0,0,size,size);
 
-    // Starfield
-    addStars();
-
-    // Cannon.js physics
-    world = new CANNON.World();
-    world.gravity.set(0, -9.82, 0);
-
-    // Mars planet
-    const marsTexture = new THREE.TextureLoader().load("https://threejsfundamentals.org/threejs/resources/images/mars_1k_color.jpg");
-    const planetGeometry = new THREE.SphereGeometry(planetRadius, 64, 64);
-    const planetMaterial = new THREE.MeshPhongMaterial({ map: marsTexture });
-    planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
-    scene.add(planetMesh);
-
-    planetBody = new CANNON.Body({ mass: 0, shape: new CANNON.Sphere(planetRadius) });
-    world.addBody(planetBody);
-
-    // Meteor
-    createMeteor();
-
-    chunks = [];
-    impactHappened = false;
-
-    animate();
+// Stripes
+for(let i=0;i<500;i++){
+    const x = Math.random()*size;
+    const y = Math.random()*size;
+    const w = 5 + Math.random()*10;
+    const h = 1 + Math.random()*3;
+    const shade = Math.floor(Math.random()*40);
+    ctx.fillStyle = `rgb(${139-shade},${69-shade},${19-shade})`;
+    ctx.fillRect(x,y,w,h);
 }
 
-function addStars() {
-    if(stars) scene.remove(stars); // remove old stars
-    const starGeometry = new THREE.BufferGeometry();
-    const starCount = 2000;
-    const positions = [];
-    for (let i=0; i<starCount; i++){
-        positions.push((Math.random()-0.5)*2000);
-        positions.push((Math.random()-0.5)*2000);
-        positions.push((Math.random()-0.5)*2000);
-    }
-    starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
-    stars = new THREE.Points(starGeometry, starMaterial);
-    scene.add(stars);
+// Patches
+for(let i=0;i<80;i++){
+    const x = Math.random()*size;
+    const y = Math.random()*size;
+    const radius = 5 + Math.random()*10;
+    const shade = Math.floor(Math.random()*50);
+    ctx.fillStyle = `rgb(${139-shade},${69-shade},${19-shade})`;
+    ctx.beginPath();
+    ctx.arc(x,y,radius,0,Math.PI*2);
+    ctx.fill();
 }
 
-function createMeteor() {
-    if(meteorMesh) scene.remove(meteorMesh);
-    if(meteorBody) world.remove(meteorBody);
+const texture = new THREE.CanvasTexture(canvas);
+texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+texture.repeat.set(1,1);
+const planetMaterial = new THREE.MeshStandardMaterial({map: texture, roughness:1, metalness:0});
+const planet = new THREE.Mesh(planetGeometry,planetMaterial);
+planet.position.x = -10;
+scene.add(planet);
 
-    const meteorGeometry = new THREE.IcosahedronGeometry(0.2,0);
-    const posAttr = meteorGeometry.attributes.position;
-    for(let i=0;i<posAttr.count;i++){
-        posAttr.setXYZ(
-            i,
-            posAttr.getX(i)+(Math.random()-0.5)*0.1,
-            posAttr.getY(i)+(Math.random()-0.5)*0.1,
-            posAttr.getZ(i)+(Math.random()-0.5)*0.1
-        );
-    }
-    meteorGeometry.attributes.position.needsUpdate = true;
-    meteorGeometry.computeVertexNormals();
+// --- Physics ---
+const world = new CANNON.World();
+world.gravity.set(0,-9.82,0);
+const planetBody = new CANNON.Body({mass:0, shape:new CANNON.Sphere(planetRadius)});
+planetBody.position.copy(planet.position);
+world.addBody(planetBody);
 
-    const meteorMaterial = new THREE.MeshPhongMaterial({color:0x888888});
-    meteorMesh = new THREE.Mesh(meteorGeometry, meteorMaterial);
-    scene.add(meteorMesh);
+// --- Meteor ---
+const meteorGeometry = new THREE.IcosahedronGeometry(1,0);
+const meteorMaterial = new THREE.MeshStandardMaterial({color:0xff8800});
+const meteor = new THREE.Mesh(meteorGeometry, meteorMaterial);
+scene.add(meteor);
 
-    meteorBody = new CANNON.Body({ mass:1, shape:new CANNON.Sphere(0.2), position:new CANNON.Vec3(0,6,0)});
-    meteorBody.angularVelocity.set(Math.random(), Math.random(), Math.random());
-    meteorBody.angularDamping = 0.1;
-    world.addBody(meteorBody);
+// Meteor initial position and direction toward planet center
+let meteorPos = new THREE.Vector3(30,15,0);
+const speedMag = 0.35;
+const meteorSpeed = new THREE.Vector3().subVectors(planet.position, meteorPos).normalize().multiplyScalar(speedMag);
+
+// --- Fire Trail with gradient ---
+const trailParticles = [];
+const trailCount = 50;
+for(let i=0;i<trailCount;i++){
+    const geom = new THREE.SphereGeometry(0.15,6,6);
+    const mat = new THREE.MeshBasicMaterial({color:0xffff00, transparent:true, opacity:1});
+    const particle = new THREE.Mesh(geom, mat);
+    particle.visible = false;
+    particle.age = 0;
+    scene.add(particle);
+    trailParticles.push(particle);
+}
+let trailIndex = 0;
+
+function updateTrail(){
+    const p = trailParticles[trailIndex];
+    p.position.copy(meteor.position);
+    p.visible = true;
+    p.scale.set(1,1,1);
+    p.material.opacity = 1;
+    p.age = 0;
+    trailIndex = (trailIndex+1) % trailCount;
+
+    trailParticles.forEach(particle => {
+        if(!particle.visible) return;
+        particle.position.addScaledVector(meteorSpeed.clone().negate(), 1);
+        particle.age += 1;
+        particle.scale.multiplyScalar(0.95);
+        particle.material.opacity *= 0.9;
+
+        if(particle.age < 5) particle.material.color.set(0xffff00); // yellow
+        else if(particle.age < 10) particle.material.color.set(0xffaa00); // orange
+        else particle.material.color.set(0xff3300); // red
+
+        if(particle.material.opacity < 0.05) particle.visible = false;
+    });
 }
 
-function spawnChunks(position){
-    for(let i=0;i<25;i++){
-        const size=Math.random()*0.15;
-        const geom=new THREE.BoxGeometry(size,size,size);
-        const mat=new THREE.MeshPhongMaterial({color:0x882200});
-        const mesh=new THREE.Mesh(geom,mat);
+// --- Debris ---
+const debris = [];
+function spawnDebris(position){
+    const debrisCount = 20;
+    for(let i=0; i<debrisCount; i++){
+        const size = 0.2 + Math.random()*0.2;
+        const geom = new THREE.BoxGeometry(size,size,size);
+        const mat = new THREE.MeshPhongMaterial({color:0x882200});
+        const mesh = new THREE.Mesh(geom,mat);
         scene.add(mesh);
 
-        const body=new CANNON.Body({
-            mass:0.2,
+        const body = new CANNON.Body({
+            mass:0.1,
             shape:new CANNON.Box(new CANNON.Vec3(size/2,size/2,size/2)),
-            position:new CANNON.Vec3(position.x, position.y, position.z)
+            position:new CANNON.Vec3(position.x,position.y,position.z)
         });
-        body.velocity.set((Math.random()-0.5)*12, Math.random()*12, (Math.random()-0.5)*12);
+
+        // Spherical distribution for even spread
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const speed = 5 + Math.random() * 2;
+        const vx = speed * Math.sin(phi) * Math.cos(theta);
+        const vy = speed * Math.cos(phi);
+        const vz = speed * Math.sin(phi) * Math.sin(theta);
+        body.velocity.set(vx, vy, vz);
+
         world.addBody(body);
-        chunks.push({mesh, body});
+        debris.push({mesh,body});
     }
 }
 
-function createExplosion(position){
-    const light = new THREE.PointLight(0xffaa33,5,20);
-    light.position.copy(position);
-    scene.add(light);
-    let intensity=5;
-    const interval=setInterval(()=>{
-        intensity-=0.2;
-        light.intensity=intensity;
-        if(intensity<=0){
-            scene.remove(light);
-            clearInterval(interval);
-        }
-    },100);
+// --- Impact patch ---
+function addImpactPatch(hitPos){
+    const patchGeometry = new THREE.CircleGeometry(3, 32);
+    const patchMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        side: THREE.DoubleSide
+    });
+    const patch = new THREE.Mesh(patchGeometry, patchMaterial);
+
+    const dir = new THREE.Vector3().subVectors(hitPos, planet.position).normalize();
+    patch.position.copy(dir.clone().multiplyScalar(planetRadius + 0.05).add(planet.position));
+    patch.lookAt(dir.clone().multiplyScalar(2).add(planet.position));
+
+    planet.add(patch);
 }
 
-function addCrater(position){
-    const craterGeo = new THREE.CircleGeometry(1,32);
-    const craterMat = new THREE.MeshBasicMaterial({color:0x111111});
-    const craterMesh = new THREE.Mesh(craterGeo, craterMat);
-    craterMesh.position.copy(position.clone().normalize().multiplyScalar(planetRadius+0.01));
-    craterMesh.lookAt(planetMesh.position);
-    craterMesh.rotation.z = Math.random()*Math.PI*2;
-    scene.add(craterMesh);
-}
-
+// --- Animate ---
+let impactHappened = false;
 function animate(){
     requestAnimationFrame(animate);
+
+    // Planet spin (right to left)
+    planet.rotation.y -= 0.002;
+
     world.step(1/60);
 
-    meteorMesh.position.copy(meteorBody.position);
-    meteorMesh.quaternion.copy(meteorBody.quaternion);
+    // Meteor movement
+    if(!impactHappened){
+        meteorPos.add(meteorSpeed);
+        meteor.position.copy(meteorPos);
+    }
 
-    chunks.forEach(obj=>{
+    // Trail
+    if(!impactHappened) updateTrail();
+
+    // Debris update
+    debris.forEach(obj=>{
         obj.mesh.position.copy(obj.body.position);
         obj.mesh.quaternion.copy(obj.body.quaternion);
     });
 
-    if(!impactHappened && meteorBody.position.y<=planetRadius+0.2){
-        impactHappened=true;
-        spawnChunks(meteorBody.position);
-        createExplosion(meteorBody.position);
-        addCrater(meteorBody.position);
-        scene.remove(meteorMesh);
-        world.remove(meteorBody);
+    // Impact detection
+    if(!impactHappened && meteorPos.distanceTo(planet.position) <= planetRadius+1){
+        impactHappened = true;
+
+        // Remove meteor and trail
+        scene.remove(meteor);
+        trailParticles.forEach(p=>p.visible=false);
+
+        // Debris
+        spawnDebris(meteorPos);
+
+        // Dark impact patch
+        addImpactPatch(meteorPos);
     }
 
     renderer.render(scene,camera);
 }
+animate();
 
-document.getElementById("restartBtn").addEventListener("click", ()=>{
-    // remove old chunks
-    chunks.forEach(c=>{
-        scene.remove(c.mesh);
-        world.remove(c.body);
-    });
-    chunks=[];
-    createMeteor();
-    impactHappened=false;
-});
-window.addEventListener("resize",()=>{
-    camera.aspect=window.innerWidth/window.innerHeight;
+// --- Restart ---
+document.getElementById("restartBtn").addEventListener("click",()=>location.reload());
+
+// --- Resize ---
+window.addEventListener("resize", ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
 </body>
 </html>
+
