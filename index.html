@@ -6,64 +6,121 @@
   <style>
     body { margin: 0; overflow: hidden; background: black; }
     canvas { display: block; }
+    #restartBtn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 40px;
+      height: 40px;
+      background: #fff;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 40px;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 0 10px #fff;
+      z-index: 10;
+    }
+    #restartBtn:hover { background: #ff6600; color: #fff; }
   </style>
 </head>
 <body>
-  <!-- Three.js -->
+  <div id="restartBtn">&#10227;</div>
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
-  <!-- Cannon.js -->
   <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
 
   <script>
-    // THREE.js setup
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    // Lighting
-    const light = new THREE.PointLight(0xffffff, 1.5, 100);
-    light.position.set(10, 10, 10);
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0x404040));
-
-    // CANNON.js world
-    const world = new CANNON.World();
-    world.gravity.set(0, -9.82, 0);
-
-    // Mars planet
+    let scene, camera, renderer, world;
+    let planetMesh, planetBody;
+    let meteorMesh, meteorBody;
+    let chunks = [];
+    let impactHappened = false;
     const planetRadius = 3;
-    const marsTexture = new THREE.TextureLoader().load("https://threejsfundamentals.org/threejs/resources/images/mars_1k_color.jpg");
-    const planetGeometry = new THREE.SphereGeometry(planetRadius, 64, 64);
-    const planetMaterial = new THREE.MeshPhongMaterial({ map: marsTexture });
-    const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
-    scene.add(planetMesh);
 
-    const planetBody = new CANNON.Body({
-      mass: 0,
-      shape: new CANNON.Sphere(planetRadius)
-    });
-    world.addBody(planetBody);
+    function initSimulation() {
+      // Clear previous scene if exists
+      if(renderer) {
+        renderer.dispose();
+        document.body.removeChild(renderer.domElement);
+      }
 
-    // Meteor
-    const meteorGeometry = new THREE.SphereGeometry(0.3, 16, 16);
-    const meteorMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
-    const meteorMesh = new THREE.Mesh(meteorGeometry, meteorMaterial);
-    scene.add(meteorMesh);
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
 
-    const meteorBody = new CANNON.Body({
-      mass: 1,
-      shape: new CANNON.Sphere(0.3),
-      position: new CANNON.Vec3(0, 6, 0)
-    });
-    world.addBody(meteorBody);
+      // Lights
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const light1 = new THREE.DirectionalLight(0xffffff, 1);
+      light1.position.set(10, 10, 10);
+      scene.add(light1);
+      const light2 = new THREE.DirectionalLight(0xffffff, 0.5);
+      light2.position.set(-10, 5, -5);
+      scene.add(light2);
 
-    // Debris chunks
-    const chunks = [];
+      // Cannon world
+      world = new CANNON.World();
+      world.gravity.set(0, -9.82, 0);
+
+      // Planet
+      const marsTexture = new THREE.TextureLoader().load("https://threejsfundamentals.org/threejs/resources/images/mars_1k_color.jpg");
+      const planetGeometry = new THREE.SphereGeometry(planetRadius, 64, 64);
+      const planetMaterial = new THREE.MeshPhongMaterial({ map: marsTexture });
+      planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
+      scene.add(planetMesh);
+
+      planetBody = new CANNON.Body({ mass: 0, shape: new CANNON.Sphere(planetRadius) });
+      world.addBody(planetBody);
+
+      // Meteor (irregular)
+      const meteorGeometry = new THREE.IcosahedronGeometry(0.2, 0);
+      meteorGeometry.vertices.forEach(v => {
+        v.x += (Math.random() - 0.5) * 0.1;
+        v.y += (Math.random() - 0.5) * 0.1;
+        v.z += (Math.random() - 0.5) * 0.1;
+      });
+      const meteorMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+      meteorMesh = new THREE.Mesh(meteorGeometry, meteorMaterial);
+      scene.add(meteorMesh);
+
+      meteorBody = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(0.2), position: new CANNON.Vec3(0, 6, 0) });
+      // Add random angular velocity for tumbling
+      meteorBody.angularVelocity.set(Math.random(), Math.random(), Math.random());
+      meteorBody.angularDamping = 0.1;
+      world.addBody(meteorBody);
+
+      // Debris array
+      chunks = [];
+
+      // Starfield
+      addStars();
+
+      impactHappened = false;
+      camera.position.z = 12;
+
+      animate();
+    }
+
+    function addStars() {
+      const starGeometry = new THREE.BufferGeometry();
+      const starCount = 2000;
+      const positions = [];
+      for (let i = 0; i < starCount; i++) {
+        positions.push((Math.random() - 0.5) * 2000);
+        positions.push((Math.random() - 0.5) * 2000);
+        positions.push((Math.random() - 0.5) * 2000);
+      }
+      starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
+      const stars = new THREE.Points(starGeometry, starMaterial);
+      scene.add(stars);
+    }
+
     function spawnChunks(position) {
       for (let i = 0; i < 25; i++) {
-        const size = Math.random() * 0.25;
+        const size = Math.random() * 0.15;
         const geom = new THREE.BoxGeometry(size, size, size);
         const mat = new THREE.MeshPhongMaterial({ color: 0x882200 });
         const mesh = new THREE.Mesh(geom, mat);
@@ -80,69 +137,39 @@
           Math.random() * 12,
           (Math.random() - 0.5) * 12
         );
-
         world.addBody(body);
         chunks.push({ mesh, body });
       }
     }
 
-    // Starfield background
-    function addStars() {
-      const starGeometry = new THREE.BufferGeometry();
-      const starCount = 2000;
-      const positions = [];
-      for (let i = 0; i < starCount; i++) {
-        const x = (Math.random() - 0.5) * 2000;
-        const y = (Math.random() - 0.5) * 2000;
-        const z = (Math.random() - 0.5) * 2000;
-        positions.push(x, y, z);
-      }
-      starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
-      const stars = new THREE.Points(starGeometry, starMaterial);
-      scene.add(stars);
-    }
-    addStars();
-
-    // Explosion effect
-    let explosionLight;
     function createExplosion(position) {
-      explosionLight = new THREE.PointLight(0xffaa33, 5, 20);
+      const explosionLight = new THREE.PointLight(0xffaa33, 5, 20);
       explosionLight.position.copy(position);
       scene.add(explosionLight);
 
-      // Shrinking flash
       let intensity = 5;
       const interval = setInterval(() => {
         intensity -= 0.2;
         explosionLight.intensity = intensity;
-        if (intensity <= 0) {
+        if(intensity <= 0) {
           scene.remove(explosionLight);
           clearInterval(interval);
         }
       }, 100);
     }
 
-    // Crater effect (dark circle on Mars)
     function addCrater(position) {
-      const craterGeometry = new THREE.CircleGeometry(0.8, 32);
+      const craterGeometry = new THREE.CircleGeometry(1, 32);
       const craterMaterial = new THREE.MeshBasicMaterial({ color: 0x111111 });
       const craterMesh = new THREE.Mesh(craterGeometry, craterMaterial);
-
-      // Place on Mars surface
       craterMesh.position.copy(position.clone().normalize().multiplyScalar(planetRadius + 0.01));
       craterMesh.lookAt(planetMesh.position);
+      craterMesh.rotation.z = Math.random() * Math.PI * 2;
       scene.add(craterMesh);
     }
 
-    // Camera
-    camera.position.z = 12;
-
-    // Animation
-    let impactHappened = false;
     function animate() {
       requestAnimationFrame(animate);
-
       world.step(1/60);
 
       meteorMesh.position.copy(meteorBody.position);
@@ -153,8 +180,7 @@
         obj.mesh.quaternion.copy(obj.body.quaternion);
       });
 
-      // Detect impact
-      if (!impactHappened && meteorBody.position.y <= planetRadius + 0.3) {
+      if(!impactHappened && meteorBody.position.y <= planetRadius + 0.2) {
         impactHappened = true;
         spawnChunks(meteorBody.position);
         createExplosion(meteorBody.position);
@@ -165,14 +191,21 @@
 
       renderer.render(scene, camera);
     }
-    animate();
 
-    // Resize
-    window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+    // Restart button
+    document.getElementById("restartBtn").addEventListener("click", () => {
+      initSimulation();
     });
+
+    window.addEventListener("resize", () => {
+      if(camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+    });
+
+    initSimulation();
   </script>
 </body>
 </html>
