@@ -39,15 +39,15 @@
     const planetRadius = 3;
 
     function initSimulation() {
-      // Clear previous scene if exists
+      // Clean up old scene and renderer if exists
       if(renderer) {
         renderer.dispose();
         document.body.removeChild(renderer.domElement);
       }
-
       scene = new THREE.Scene();
+
       camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-      renderer = new THREE.WebGLRenderer();
+      renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
@@ -60,7 +60,7 @@
       light2.position.set(-10, 5, -5);
       scene.add(light2);
 
-      // Cannon world
+      // Cannon.js world
       world = new CANNON.World();
       world.gravity.set(0, -9.82, 0);
 
@@ -74,24 +74,29 @@
       planetBody = new CANNON.Body({ mass: 0, shape: new CANNON.Sphere(planetRadius) });
       world.addBody(planetBody);
 
-      // Meteor (irregular)
+      // Meteor (irregular and tumbling)
       const meteorGeometry = new THREE.IcosahedronGeometry(0.2, 0);
-      meteorGeometry.vertices.forEach(v => {
-        v.x += (Math.random() - 0.5) * 0.1;
-        v.y += (Math.random() - 0.5) * 0.1;
-        v.z += (Math.random() - 0.5) * 0.1;
-      });
+      const posAttr = meteorGeometry.attributes.position;
+      for (let i = 0; i < posAttr.count; i++) {
+        posAttr.setXYZ(
+          i,
+          posAttr.getX(i) + (Math.random() - 0.5) * 0.1,
+          posAttr.getY(i) + (Math.random() - 0.5) * 0.1,
+          posAttr.getZ(i) + (Math.random() - 0.5) * 0.1
+        );
+      }
+      meteorGeometry.attributes.position.needsUpdate = true;
+      meteorGeometry.computeVertexNormals();
+
       const meteorMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
       meteorMesh = new THREE.Mesh(meteorGeometry, meteorMaterial);
       scene.add(meteorMesh);
 
       meteorBody = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(0.2), position: new CANNON.Vec3(0, 6, 0) });
-      // Add random angular velocity for tumbling
       meteorBody.angularVelocity.set(Math.random(), Math.random(), Math.random());
       meteorBody.angularDamping = 0.1;
       world.addBody(meteorBody);
 
-      // Debris array
       chunks = [];
 
       // Starfield
@@ -131,7 +136,6 @@
           shape: new CANNON.Box(new CANNON.Vec3(size/2, size/2, size/2)),
           position: new CANNON.Vec3(position.x, position.y, position.z)
         });
-
         body.velocity.set(
           (Math.random() - 0.5) * 12,
           Math.random() * 12,
@@ -193,9 +197,7 @@
     }
 
     // Restart button
-    document.getElementById("restartBtn").addEventListener("click", () => {
-      initSimulation();
-    });
+    document.getElementById("restartBtn").addEventListener("click", initSimulation);
 
     window.addEventListener("resize", () => {
       if(camera && renderer) {
