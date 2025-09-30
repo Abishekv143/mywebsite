@@ -37,7 +37,7 @@
   <script>
     let scene, camera, renderer;
     let planet, planetRadius = 5;
-    let meteor, meteorTrail = [], meteorActive = true;
+    let meteor,  meteorTrail = []; meteorActive = true;
     let debris = [];
     let impactDone = false;
 
@@ -57,33 +57,19 @@
       scene.add(light);
       scene.add(new THREE.AmbientLight(0x404040));
 
-      // Planet (Mars-like with noise patches)
-      const geometry = new THREE.SphereGeometry(planetRadius, 64, 64);
-      const material = new THREE.MeshPhongMaterial({ color: 0x8B4513, flatShading: true });
+      // Mars (with your texture)
+      const marsTexture = new THREE.TextureLoader().load("mars_texture.png");
+      const geometry = new THREE.SphereGeometry(planetRadius, 900, 900);
+      const material = new THREE.MeshPhongMaterial({ map: marsTexture, flatShading: true });
       planet = new THREE.Mesh(geometry, material);
       planet.position.x = -3;
       scene.add(planet);
 
-      // Add surface patches
-      for (let i = 0; i < 40; i++) {
-        const patchGeo = new THREE.CircleGeometry(Math.random() * 0.5 + 0.2, 32);
-        const patchMat = new THREE.MeshBasicMaterial({ color: 0x5a2d0c });
-        const patch = new THREE.Mesh(patchGeo, patchMat);
-
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-        const x = planetRadius * Math.sin(phi) * Math.cos(theta);
-        const y = planetRadius * Math.cos(phi);
-        const z = planetRadius * Math.sin(phi) * Math.sin(theta);
-
-        patch.position.set(x, y, z);
-        patch.lookAt(planet.position);
-        planet.add(patch);
-      }
-
-      // Meteor
-      const meteorGeo = new THREE.DodecahedronGeometry(0.4, 0);
-      const meteorMat = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, flatShading: true });
+      
+      // Meteor (with your texture)
+      const meteorTexture = new THREE.TextureLoader().load("meteor_texture.png");
+      const meteorGeo = new THREE.DodecahedronGeometry(0.55, 0);
+      const meteorMat = new THREE.MeshPhongMaterial({ map: meteorTexture, flatShading: true });
       meteor = new THREE.Mesh(meteorGeo, meteorMat);
       meteor.position.set(10, 2, 0);
       scene.add(meteor);
