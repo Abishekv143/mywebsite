@@ -36,7 +36,7 @@
 
   <script>
     let scene, camera, renderer;
-    let planet, planetRadius = 5;
+    let planet, planetRadius = 4.55;
     let meteor,  meteorTrail = []; meteorActive = true;
     let debris = [];
     let impactDone = false;
@@ -62,7 +62,7 @@
       const geometry = new THREE.SphereGeometry(planetRadius, 900, 900);
       const material = new THREE.MeshPhongMaterial({ map: marsTexture, flatShading: true });
       planet = new THREE.Mesh(geometry, material);
-      planet.position.x = -3;
+      planet.position.x = -7;
       scene.add(planet);
 
       
@@ -71,10 +71,10 @@
       const meteorGeo = new THREE.DodecahedronGeometry(0.55, 0);
       const meteorMat = new THREE.MeshPhongMaterial({ map: meteorTexture, flatShading: true });
       meteor = new THREE.Mesh(meteorGeo, meteorMat);
-      meteor.position.set(10, 2, 0);
+      meteor.position.set(19, 5, 0.7);
       scene.add(meteor);
 
-      camera.position.z = 15;
+      camera.position.z = 20;
 
       // Stars background
       addStars();
